@@ -23,6 +23,7 @@ from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 
+
 try:
     from torch.utils.tensorboard import SummaryWriter
 
@@ -53,6 +54,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
     progress_bar = tqdm(range(opt.iterations), desc="Training progress")
     smooth_term = get_linear_noise_func(lr_init=0.1, lr_final=1e-15, lr_delay_mult=0.01, max_steps=20000)
     for iteration in range(1, opt.iterations + 1):
+        #torch.cuda.empty_cache()
         if network_gui.conn == None:
             network_gui.try_connect()
         while network_gui.conn != None:
@@ -100,6 +102,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
         render_pkg_re = render(viewpoint_cam, gaussians, pipe, background, d_xyz, d_rotation, d_scaling, dataset.is_6dof)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg_re["render"], render_pkg_re[
             "viewspace_points"], render_pkg_re["visibility_filter"], render_pkg_re["radii"]
+        
         # depth = render_pkg_re["depth"]
 
         # Loss
