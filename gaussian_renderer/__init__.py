@@ -30,7 +30,7 @@ def quaternion_multiply(q1, q2):
 
 
 def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor, d_xyz, d_rotation, d_scaling, is_6dof=False,
-           scaling_modifier=1.0, override_color=None):
+           scaling_modifier=1.0, override_color=None, initial_scaling=0, initial_rot=0):
     """
     Render the scene. 
     
@@ -78,14 +78,17 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor, d_
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
+
     scales = None
     rotations = None
     cov3D_precomp = None
     if pipe.compute_cov3D_python:
         cov3D_precomp = pc.get_covariance(scaling_modifier)
     else:
-        scales = pc.get_scaling + d_scaling
-        rotations = pc.get_rotation + d_rotation
+        #scales = pc.get_scaling + d_scaling
+        #rotations = pc.get_rotation + d_rotation
+        scales = initial_scaling
+        rotations = initial_rot
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
@@ -103,8 +106,15 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor, d_
     else:
         colors_precomp = override_color
 
+    #pc._scaling = scales
+    #pc._rotation = rotations
+    #pc._xyz = means3D
+    #pc._opacity = opacity
+
+    #pc.save_ply("outputply/pc.ply")
+
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
-    rendered_image, radii, depth = rasterizer(
+    rendered_image, radii = rasterizer(
         means3D=means3D,
         means2D=means2D,
         shs=shs,
@@ -119,5 +129,4 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor, d_
     return {"render": rendered_image,
             "viewspace_points": screenspace_points,
             "visibility_filter": radii > 0,
-            "radii": radii,
-            "depth": depth}
+            "radii": radii}

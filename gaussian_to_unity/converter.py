@@ -17,7 +17,7 @@ def get_order(means3d: torch.tensor) -> np.array:
 
 # Convert the splats of a certain timestep to the Unity format. Each run appends a new frame to the asset.
 def gaussian_timestep_to_unity(pc,
-                                means3d: torch.tensor, 
+                            means3d: torch.tensor, 
                                scales: torch.tensor, 
                                rotations: torch.tensor, 
                                order_indexes: np.array, 
@@ -25,11 +25,11 @@ def gaussian_timestep_to_unity(pc,
                                args = None, 
                                basepath: str ="/", idx=1) -> None:
 
+    #test_xyz = pc.get_xyz[order_indexes].cpu().numpy()
     timestart = tm.time()
     means3D_sorted = means3d[order_indexes].cpu().numpy().copy()
 
-    rotations_to_save, scales_linealized= linealize(rotations[order_indexes].cpu().numpy().copy(), 
-                                                  scales[order_indexes].cpu().numpy().copy())
+    
     if debug:
         print("linealization time:", tm.time()-timestart)
 
@@ -37,7 +37,7 @@ def gaussian_timestep_to_unity(pc,
     chunkSize = 256
 
     means3D_to_save, means_chunks = create_chunks(means3D_sorted, means3d.shape[0], chunkSize)
-    scales_to_save, scale_chunks = create_chunks(scales_linealized, means3d.shape[0], chunkSize)
+    
     
     if debug:
         print("chunk creation time:", tm.time()-timestart)
@@ -47,20 +47,26 @@ def gaussian_timestep_to_unity(pc,
 
     if debug:
         print("create_positions_asset time:", tm.time()-timestart)
-    
-    create_others_asset(rotations_to_save, scales_to_save, basepath, scale_format=args.scale_format, idx= idx)
-    
-    if debug:
-        print("create_others_asset time:", tm.time()-timestart)
 
+    timestart = tm.time()
+
+    rotations_to_save, scales_linealized= linealize(rotations[order_indexes].cpu().numpy().copy(), 
+                                                scales[order_indexes].cpu().numpy().copy())    
+    scales_to_save, scale_chunks = create_chunks(scales_linealized, means3d.shape[0], chunkSize)
+    
     timestart = tm.time()
     create_chunks_asset(means_chunks, scale_chunks, basepath, idx= idx)
 
     if debug:
         print("create_chunks_asset time:", tm.time()-timestart)
 
-def gaussian_static_data_to_unity(pc,
-        splat_count: int,
+    if (args.include_others):
+        create_others_asset(rotations_to_save, scales_to_save, basepath, scale_format=args.scale_format, idx= idx)
+
+    if debug:
+        print("create_others_asset time:", tm.time()-timestart)
+
+def gaussian_static_data_to_unity(splat_count: int,
                         scales: torch.tensor, 
                         rotations: torch.tensor, 
                         dc: torch.tensor,
@@ -72,16 +78,20 @@ def gaussian_static_data_to_unity(pc,
     
     print("Saving static data")
 
-    timestart = tm.time()
-    rotations_to_save, scales_linealized= linealize(rotations[order_indexes].cpu().numpy().copy(), 
-                                                  scales[order_indexes].cpu().numpy().copy())
-    
+    if (not args.include_others):
+
+        chunkSize = 256
+        timestart = tm.time()
+        rotations_to_save, scales_linealized= linealize(rotations[order_indexes].cpu().numpy().copy(), 
+                                                    scales[order_indexes].cpu().numpy().copy())
+        scales_to_save, scale_chunks = create_chunks(scales_linealized, splat_count, chunkSize)
+
+        create_others_asset(rotations_to_save, scales_to_save, basepath, scale_format=args.scale_format)
+
+        print("create_others_asset time:", tm.time()-timestart)
+        
     chunkSize = 256
-    scales_to_save, scale_chunks = create_chunks(scales_linealized, splat_count, chunkSize)
-
-
     
-
     # Morton reorder
     dc = dc.cpu().numpy()[order_indexes]
     shs = shs.cpu().numpy()[order_indexes]
@@ -107,7 +117,6 @@ def gaussian_static_data_to_unity(pc,
     shs_to_save, shs_chunks = create_chunks(shs, splat_count, chunkSize, True)
 
     shs_chunks = shs_chunks.squeeze(2)
-
     print("create_chunks time:", tm.time()-timestart)
 
     timestart = tm.time()
@@ -120,4 +129,5 @@ def gaussian_static_data_to_unity(pc,
 
     timestart = tm.time()
     create_chunks_static_asset(col_chunks, shs_chunks, basepath)
+
     print("create_chunks_static_asset time:", tm.time()-timestart)

@@ -24,6 +24,15 @@ from gaussian_renderer import GaussianModel
 import imageio
 import numpy as np
 
+def save_gaussian_model(gaussians):
+    os.makedirs("gaussian_model_2", exist_ok=True)
+    torch.save(gaussians._opacity, "gaussian_model_2/opacity.pt")
+    torch.save(gaussians.get_xyz, "gaussian_model_2/positions.pt")
+    torch.save(gaussians.get_rotation, "gaussian_model_2/rotations.pt")
+    torch.save(gaussians.get_scaling, "gaussian_model_2/scales.pt")
+    torch.save(gaussians.get_features, "gaussian_model_2/features.pt")
+
+
 
 def render_set(model_path, load2gpu_on_the_fly, is_6dof, name, iteration, views, gaussians, pipeline, background, deform):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
@@ -34,22 +43,28 @@ def render_set(model_path, load2gpu_on_the_fly, is_6dof, name, iteration, views,
     makedirs(gts_path, exist_ok=True)
     makedirs(depth_path, exist_ok=True)
 
+    initial_scaling = gaussians.get_scaling
+    initial_rot = gaussians.get_rotation
+
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if load2gpu_on_the_fly:
             view.load2device()
         fid = view.fid
+        #save_gaussian_model(gaussians)
         xyz = gaussians.get_xyz
         time_input = fid.unsqueeze(0).expand(xyz.shape[0], -1)
         d_xyz, d_rotation, d_scaling = deform.step(xyz.detach(), time_input)
-        results = render(view, gaussians, pipeline, background, d_xyz, d_rotation, d_scaling, is_6dof)
+
+        if idx==0:
+            initial_scaling = gaussians.get_scaling + d_scaling
+            initial_rot = gaussians.get_rotation + d_rotation
+        
+        results = render(view, gaussians, pipeline, background, d_xyz, d_rotation, d_scaling, is_6dof, initial_scaling=initial_scaling, initial_rot=initial_rot)
         rendering = results["render"]
-        depth = results["depth"]
-        depth = depth / (depth.max() + 1e-5)
 
         gt = view.original_image[0:3, :, :]
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
-        torchvision.utils.save_image(depth, os.path.join(depth_path, '{0:05d}'.format(idx) + ".png"))
 
 
 def interpolate_time(model_path, load2gpt_on_the_fly, is_6dof, name, iteration, views, gaussians, pipeline, background, deform):
@@ -208,6 +223,7 @@ def interpolate_poses(model_path, load2gpt_on_the_fly, is_6dof, name, iteration,
         time_input = fid.unsqueeze(0).expand(xyz.shape[0], -1)
         d_xyz, d_rotation, d_scaling = timer.step(xyz.detach(), time_input)
 
+
         results = render(view, gaussians, pipeline, background, d_xyz, d_rotation, d_scaling, is_6dof)
         rendering = results["render"]
         renderings.append(to8b(rendering.cpu().numpy()))
@@ -264,7 +280,7 @@ def interpolate_view_original(model_path, load2gpt_on_the_fly, is_6dof, name, it
         time_input = fid.unsqueeze(0).expand(xyz.shape[0], -1)
         d_xyz, d_rotation, d_scaling = timer.step(xyz.detach(), time_input)
 
-        results = render(view, gaussians, pipeline, background, d_xyz, d_rotation, d_scaling, is_6dof)
+        results = render(view, gaussians, pipeline, background, d_xyz, d_rotation, d_scaling, is_6dof, idx=i)
         rendering = results["render"]
         renderings.append(to8b(rendering.cpu().numpy()))
         depth = results["depth"]

@@ -412,8 +412,12 @@ def create_one_file(basepath, splat_count=0, chunk_count=0, frame_time=1/20, arg
     data.append(struct.pack('I', ColorFormats[args.col_format])) # Color format 
     data.append(struct.pack('I', color_width)) # Color width
     data.append(struct.pack('I', color_height)) # Color height
+    data.append(struct.pack('I', int(args.include_others))) # Include dynamic rotations and scaling
 
     static_info = ["chunks_static.bytes", "colors.bytes", "shs.bytes"]
+
+    if (not args.include_others):
+        static_info.append("others.bytes")
     
     # ---- Static data ----
     
@@ -432,8 +436,9 @@ def create_one_file(basepath, splat_count=0, chunk_count=0, frame_time=1/20, arg
     chunk_size = os.path.getsize(os.path.join(chunks_path, os.listdir(chunks_path)[0]))
     data.append(struct.pack('I', chunk_size))
     
-    others_size = os.path.getsize(os.path.join(others_path, os.listdir(others_path)[0]))
-    data.append(struct.pack('I', others_size))
+    if (args.include_others):
+        others_size = os.path.getsize(os.path.join(others_path, os.listdir(others_path)[0]))
+        data.append(struct.pack('I', others_size))
     
     for position_file in sorted(os.listdir(positions_path), key=sort_key):
         with open(os.path.join(positions_path, position_file), 'rb') as f:
@@ -442,8 +447,9 @@ def create_one_file(basepath, splat_count=0, chunk_count=0, frame_time=1/20, arg
         with open(os.path.join(chunks_path, position_file), 'rb') as f:
             data.append(f.read())
         
-        with open(os.path.join(others_path, position_file), 'rb') as f:
-            data.append(f.read())
+        if (args.include_others):
+            with open(os.path.join(others_path, position_file), 'rb') as f:
+                data.append(f.read())
     
     # Write the data to a single file
     file_name = os.path.join(os.path.dirname(basepath), f"{args.save_name}.bytes")
